@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    text-align: center;
+    padding: 60px 24px;
+    color: #333;
+  }
+  .loader {
+    margin: 0 auto 20px;
+    width: 32px;
+    height: 32px;
+    border: 3px solid #eee;
+    border-top-color: #06c755;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status { font-size: 15px; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <div class="loader" id="loader"></div>
+  <p id="status">クイズを準備しています…</p>
+
+<script>
+  // ↓↓↓ この2つは環境に合わせて書き換えてください ↓↓↓
+  const LIFF_ID = '2011202109-sLbsYzXR';
+  const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyj-Li1YbO-GZuUYsKsQOkwggZP98rxS20ZOSQ_ligr8clyUAbd6dkCjaAFXUp0d9QK/exec';
+  const TRIGGER_SECRET = 'G9vwfjp6uKByyGiUetvdPWSo6nnJbouz';    // Code.gs の LIFF_TRIGGER_SECRET と同じ値
+  const BOT_BASIC_ID = '@523iwcof';                             // トーク画面へ自動遷移させるBotのID
+  // ↑↑↑ ここまで ↑↑↑
+
+  const statusEl = document.getElementById('status');
+  const loaderEl = document.getElementById('loader');
+
+  function setStatus(text, hideLoader) {
+    statusEl.textContent = text;
+    if (hideLoader) loaderEl.style.display = 'none';
+  }
+
+  async function main() {
+    await liff.init({ liffId: LIFF_ID });
+
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+
+    const profile = await liff.getProfile();
+
+    // QRコードのURLに ?quizId=2 のようについている場合、その番号の問題を固定で出す
+    // （LIFF経由だと liff.state= の中に包まれて渡ってくることがあるので両対応にする）
+    let quizId = new URLSearchParams(window.location.search).get('quizId');
+    if (!quizId) {
+      const liffState = new URLSearchParams(window.location.search).get('liff.state');
+      if (liffState) {
+        quizId = new URLSearchParams(liffState.replace(/^\?/, '')).get('quizId');
+      }
+    }
+
+    let url = GAS_ENDPOINT
+      + '?action=startQuiz'
+      + '&userId=' + encodeURIComponent(profile.userId)
+      + '&secret=' + encodeURIComponent(TRIGGER_SECRET);
+    if (quizId) {
+      url += '&quizId=' + encodeURIComponent(quizId);
+    }
+
+    // GASのレスポンスはCORSの都合で読み取らず、送信だけ行う(no-cors)
+    await fetch(url, { method: 'GET', mode: 'no-cors' });
+
+    setStatus('トーク画面にクイズを送りました！移動します…', true);
+
+    // Botのトーク画面へ遷移する（LINEアプリ内・外どちらからでも動く公式のディープリンク）
+    setTimeout(() => {
+      window.location.href = 'https://line.me/R/oaMessage/' + encodeURIComponent(BOT_BASIC_ID) + '/';
+    }, 600);
+  }
+
+  main().catch(function (err) {
+    setStatus('エラーが発生しました: ' + err, true);
+  });
+</script>
+</body>
+</html>
